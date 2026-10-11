@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# GitHub Actions
+.github/actions/**/actions/**
+!.github/actions/**/action.yml
+
+# OS
+.DS_Store
+Thumbs.db
