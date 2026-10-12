@@ -2,7 +2,7 @@ name: WorkBuddy 每日签到 + 派猫猫旅行
 
 on:
   schedule:
-    # 北京时间每天 10:00 执行（UTC 02:00）
+    # 北京时间每天 10:00（UTC 02:00）
     - cron: '0 2 * * *'
   workflow_dispatch:
 
@@ -15,41 +15,42 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 设置 Python
+      - name: 设置 Python（动态取版本，不写死）
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: 验证环境变量
-        run: |
-          echo "Python: $(command -v python)"
-          echo "Python 版本: $(python --version)"
-          echo "WORKBUDDY_ACCESS_TOKEN 已配置: ${{ secrets.WORKBUDDY_ACCESS_TOKEN != '' }}"
-          echo "WORKBUDDY_USER_ID 已配置: ${{ secrets.WORKBUDDY_USER_ID != '' }}"
-          echo "FEISHU_WEBHOOK 已配置: ${{ secrets.FEISHU_WEBHOOK != '' }}"
 
       - name: 执行 WorkBuddy 每日任务
         env:
           WORKBUDDY_ACCESS_TOKEN: ${{ secrets.WORKBUDDY_ACCESS_TOKEN }}
           WORKBUDDY_USER_ID: ${{ secrets.WORKBUDDY_USER_ID }}
-          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
-          FEISHU_WEBHOOK_SIGN: ${{ secrets.FEISHU_WEBHOOK_SIGN }}
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+          # 4 个接口地址：抓到真实 URL 后在此或代码里填
+          WB_CHECKIN_STATUS_URL: ${{ secrets.WB_CHECKIN_STATUS_URL }}
+          WB_CHECKIN_DO_URL: ${{ secrets.WB_CHECKIN_DO_URL }}
+          WB_TRAVEL_STATUS_URL: ${{ secrets.WB_TRAVEL_STATUS_URL }}
+          WB_TRAVEL_CLAIM_URL: ${{ secrets.WB_TRAVEL_CLAIM_URL }}
+          WB_TRAVEL_DEPART_URL: ${{ secrets.WB_TRAVEL_DEPART_URL }}
         run: |
-          python workbuddy_daily.py
+          PY=$(command -v python || command -v python3)
+          echo "Python: $PY"
+          "$PY" workbuddy_daily.py
 
-      - name: 运行失败通知
+      - name: 运行失败通知（微信）
         if: failure()
         env:
-          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
-          FEISHU_WEBHOOK_SIGN: ${{ secrets.FEISHU_WEBHOOK_SIGN }}
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
         run: |
-          python -c "
-          import sys; sys.path.insert(0, '.')
-          from workbuddy_daily import get_env, push_feishu
-          import datetime
-          webhook = get_env('FEISHU_WEBHOOK')
-          sign = get_env('FEISHU_WEBHOOK_SIGN', '')
-          if webhook:
-              msg = '❌ WorkBuddy 每日任务执行失败\\n⏰ ' + datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
-              push_feishu(webhook, sign, msg)
+          PY=$(command -v python || command -v python3)
+          "$PY" -c "
+          import sys, datetime, urllib.parse, urllib.request
+          key='${{ secrets.SERVERCHAN_KEY }}'.strip()
+          if not key: sys.exit(0)
+          if not key.endswith('.send'): key+='.send'
+          msg='❌ WorkBuddy 每日任务执行失败\n⏰ '+datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+          data=urllib.parse.urlencode({'title':'WorkBuddy 任务失败','desp':msg}).encode()
+          try:
+              urllib.request.urlopen(urllib.request.Request('https://sctapi.ftqq.com/'+key,data=data,headers={'Content-Type':'application/x-www-form-urlencoded'},method='POST'),timeout=15)
+          except Exception as e:
+              print('失败通知也失败:',e)
           "
