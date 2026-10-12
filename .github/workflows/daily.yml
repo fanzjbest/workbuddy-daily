@@ -1,56 +1,40 @@
-name: WorkBuddy 每日签到 + 派猫猫旅行
+name: WorkBuddy 每日任务
 
 on:
   schedule:
-    # 北京时间每天 10:00（UTC 02:00）
-    - cron: '0 2 * * *'
+    # 每天北京时间 10:00 签到 + 派猫猫旅行（UTC 02:00）
+    - cron: "0 2 * * *"
   workflow_dispatch:
 
 jobs:
-  daily-task:
+  growth:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-
+    timeout-minutes: 15
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 设置 Python（动态取版本，不写死）
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: 执行 WorkBuddy 每日任务
-        env:
-          WORKBUDDY_ACCESS_TOKEN: ${{ secrets.WORKBUDDY_ACCESS_TOKEN }}
-          WORKBUDDY_USER_ID: ${{ secrets.WORKBUDDY_USER_ID }}
-          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
-          # 4 个接口地址：抓到真实 URL 后在此或代码里填
-          WB_CHECKIN_STATUS_URL: ${{ secrets.WB_CHECKIN_STATUS_URL }}
-          WB_CHECKIN_DO_URL: ${{ secrets.WB_CHECKIN_DO_URL }}
-          WB_TRAVEL_STATUS_URL: ${{ secrets.WB_TRAVEL_STATUS_URL }}
-          WB_TRAVEL_CLAIM_URL: ${{ secrets.WB_TRAVEL_CLAIM_URL }}
-          WB_TRAVEL_DEPART_URL: ${{ secrets.WB_TRAVEL_DEPART_URL }}
+      - name: 安装依赖
         run: |
-          PY=$(command -v python || command -v python3)
-          echo "Python: $PY"
-          "$PY" workbuddy_daily.py
+          pip install playwright
+          python -m playwright install --with-deps chromium
 
-      - name: 运行失败通知（微信）
-        if: failure()
+      - name: 执行成长中心任务
         env:
+          WB_STATE: ${{ secrets.WB_STATE }}
           SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
-        run: |
-          PY=$(command -v python || command -v python3)
-          "$PY" -c "
-          import sys, datetime, urllib.parse, urllib.request
-          key='${{ secrets.SERVERCHAN_KEY }}'.strip()
-          if not key: sys.exit(0)
-          if not key.endswith('.send'): key+='.send'
-          msg='❌ WorkBuddy 每日任务执行失败\n⏰ '+datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
-          data=urllib.parse.urlencode({'title':'WorkBuddy 任务失败','desp':msg}).encode()
-          try:
-              urllib.request.urlopen(urllib.request.Request('https://sctapi.ftqq.com/'+key,data=data,headers={'Content-Type':'application/x-www-form-urlencoded'},method='POST'),timeout=15)
-          except Exception as e:
-              print('失败通知也失败:',e)
-          "
+        run: python wb_growth_cloud.py
+
+      - name: 上传结果截图（排查用）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-screenshot
+          path: |
+            result.png
+            login_required.png
+          retention-days: 3
+          if-no-files-found: ignore
