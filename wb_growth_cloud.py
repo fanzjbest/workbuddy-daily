@@ -44,16 +44,31 @@ async () => {
   } catch(e){}
   out.checked_in = checked;
 
-  // 先领奖，再判断是否派新猫
+  // ========== 领奖：仅当猫猫已到站（arrived）才可领 ==========
+  // 关键：traveling 表示猫猫还在路上，此时 claim 无效；
+  // idle 表示没有待领的旅行记录。历史 bug：每天只跑一次，
+  // 猫猫当天到站的积分要等到第二天才被领走。
   const ts = out.travel_status.json?.data || {};
   out.travel_state_before = ts.state;
   out.daily_limit_before = !!ts.daily_limit_reached;
   out.buddy_name = '';
 
-  if (ts.state === 'traveling' || ts.state === 'arrived') {
+  const shTs = (sec) => {
+    if (!sec) return '';
+    const d = new Date((sec + 8*3600) * 1000);
+    return d.toISOString().slice(0,16).replace('T',' ');
+  };
+  out.arrive_at_txt = shTs(ts.arrive_at);
+  out.depart_at_txt  = shTs(ts.depart_at);
+
+  if (ts.state === 'arrived') {
     out.claim = await req('POST','/activity/growth/buddy/travel/claim', {});
+  } else if (ts.state === 'traveling') {
+    out.claim = {skipped:'buddy still traveling, arrive at ' + (out.arrive_at_txt||'?')};
   } else {
-    out.claim = {skipped:'no pending travel'};
+    // idle 时也尝试一次，兼容后端记录未及时清理的情况
+    out.claim = await req('POST','/activity/growth/buddy/travel/claim', {});
+    if (out.claim.status !== 200) out.claim = {skipped:'no unclaimed travel'};
   }
 
   out.travel_status2 = await req('GET','/activity/growth/buddy/travel/status');
@@ -124,6 +139,8 @@ def to_pw(cookies):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--headless", action="store_true", default=True)
+    ap.add_argument("--always-notify", action="store_true",
+                    help="每次运行都推送；默认仅在签到/领奖/派猫等有实际动作时推送")
     args = ap.parse_args()
 
     from playwright.sync_api import sync_playwright
@@ -200,30 +217,47 @@ def main():
     claim = result.get("claim", {})
     depart = result.get("depart", {})
 
-    if claim.get("status") == 200:
-        print("领取旅行奖励: 成功 ✅")
-        lines.append("- 旅行奖励: 已领取 ✅")
+    def biz_ok(r):
+        # HTTP 200 且业务 code == 0 才算成功
+        return isinstance(r, dict) and r.get("status") == 200 \
+            and isinstance(r.get("json"), dict) and r["json"].get("code") == 0
+
+    if biz_ok(claim):
+        cr = (claim.get("json") or {}).get("data") or {}
+        gain = cr.get("reward_credit") or cr.get("credit") or "?"
+        print(f"领取旅行奖励: 成功 ✅  到账 {gain} 积分")
+        lines.append(f"- 🎁 旅行奖励已领取：**+{gain} 积分** ✅")
     elif "skipped" in claim:
         print(f"领取旅行奖励: 跳过（{claim['skipped']}）")
     else:
         print(f"领取旅行奖励: {claim.get('raw') or claim.get('error')}")
         lines.append(f"- 旅行奖励: {claim.get('raw') or claim.get('error')}")
 
+    if result.get("travel_state_before") == "traveling":
+        print(f"猫咪旅途中，预计 {result.get('arrive_at_txt')} 到站（北京时间）")
+        if not biz_ok(claim):
+            lines.append(f"- ⏳ 猫咪旅途中，预计 {result.get('arrive_at_txt')} 到站后自动领奖")
+
     print(f"操作后: state={result.get('travel_state_after')}")
-    if depart.get("status") == 200:
+    if biz_ok(depart):
         loc = result.get("depart_location", {})
         print(f"派出新猫: 成功 → {loc.get('name')} (id={loc.get('id')}) ✅")
         lines.append(f"- 派猫猫: 已出发 ✅「{loc.get('name')}」")
     elif "skipped" in depart:
         print(f"派出新猫: 跳过（{depart['skipped']}）")
-        lines.append(f"- 派猫猫: 今日已旅行过，跳过")
     else:
         print(f"派出新猫: {depart.get('raw') or depart.get('error')}")
         lines.append(f"- 派猫猫: {depart.get('raw') or depart.get('error')}")
 
     print(f"最终状态: {ts3.get('state')}  能量: {energy.get('balance')}")
     print("=" * 58)
-    push_serverchan("WorkBuddy 每日任务完成", "\n".join(lines), key)
+
+    # 高频模式下只在"有实际收获"时推送，避免每2小时刷屏
+    did_something = biz_ok(claim) or biz_ok(depart) or result.get("checked_in")
+    if args.always_notify or did_something:
+        push_serverchan("WorkBuddy 每日任务完成", "\n".join(lines), key)
+    else:
+        print("[push] 本次无新收获（已签到/已派过/暂无待领奖励），不推送")
     print("[OK] 完成")
 
 
