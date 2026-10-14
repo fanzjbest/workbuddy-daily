@@ -1,0 +1,41 @@
+name: WorkBuddy 派猫猫
+
+on:
+  schedule:
+    # 北京时间 10:13 与 22:13（UTC 02:13 / 14:13）各派一次
+    - cron: "13 2,14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WB_STATE: ${{ secrets.WB_STATE }}
+      SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装依赖
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: 派猫猫旅行
+        run: python wb_growth_cloud.py --mode depart
+      - name: 上传结果截图（排查用）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dispatch-screenshot
+          path: |
+            result.png
+            login_required.png
+          retention-days: 3
+          if-no-files-found: ignore
