@@ -1,0 +1,49 @@
+# WorkBuddy 自动化部署模板
+# 用法：复制为仓库内 .github/workflows/daily.yml
+# 仓库 Settings → Secrets 添加：
+#   WB_STATE      —— 从浏览器导出的登录态 Cookie（JSON 数组字符串）
+#   SERVERCHAN_KEY —— 方糖 Server酱 SendKey（可选，用于微信通知）
+# 注意：WB_STATE 含登录凭证，仓库请设为 Private。
+#
+# 时区说明：cron 为 UTC。北京时间 = UTC + 8。
+#   9:00 北京 = 1:00 UTC；9:05 北京 = 1:05 UTC；14:05 北京 = 6:05 UTC
+
+name: WorkBuddy 每日任务
+
+on:
+  schedule:
+    - cron: "0 1 * * *"      # 北京时间 9:00 领积分（加油站签到 + 猫猫奖励）
+    - cron: "5 1 * * *"      # 北京时间 9:05 派猫猫
+    - cron: "5 6 * * *"      # 北京时间 14:05 派猫猫
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: 领积分（9:00）
+        if: github.event.schedule == '0 1 * * *' || github.event_name == 'workflow_dispatch'
+        env:
+          WB_STATE: ${{ secrets.WB_STATE }}
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+        run: python checkin.py --mode gas
+
+      - name: 派猫猫（9:05 / 14:05）
+        if: github.event.schedule == '5 1 * * *' || github.event.schedule == '5 6 * * *' || github.event_name == 'workflow_dispatch'
+        env:
+          WB_STATE: ${{ secrets.WB_STATE }}
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+        run: python checkin.py --mode cat
