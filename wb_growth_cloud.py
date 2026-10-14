@@ -75,6 +75,22 @@ async (mode) => {
     }
   }
 
+  // ============ 加油站每日签到（每日100积分，/v2/billing 域，与成长计划独立） ============
+  out.gas_claim = {skipped:'claim disabled in this mode'};
+  if (doClaim) {
+    out.gas_status = await req('POST','/v2/billing/meter/checkin-activity-status', {});
+    const gs = out.gas_status.json?.data || {};
+    out.gas_checked_before = !!gs.today_checked_in;
+    out.gas_streak_before = gs.streak_days;
+    if (gs.active && !gs.today_checked_in) {
+      out.gas_claim = await req('POST','/v2/billing/meter/daily-checkin', {});
+    } else if (!gs.active) {
+      out.gas_claim = {skipped:'activity inactive'};
+    } else {
+      out.gas_claim = {skipped:'already checked in today'};
+    }
+  }
+
   // ============ 派猫：仅当 idle 且今日额度未用 ============
   out.depart = {skipped:'depart disabled in this mode'};
   if (doDepart) {
@@ -283,6 +299,19 @@ def main():
             if not biz_ok(claim):
                 lines.append(f"- ⏳ 猫咪旅途中，预计 {result.get('arrive_at_txt')} 到站后会自动领")
 
+        # ---- 加油站每日签到（每日100积分） ----
+        gas = result.get("gas_claim", {})
+        if biz_ok(gas):
+            gd = (gas.get("json") or {}).get("data") or {}
+            gain = gd.get("credit", "?")
+            print(f"加油站签到: 成功 ✅  +{gain} 积分  连签 {gd.get('streak_days')} 天")
+            lines.append(f"- ⛽ 加油站签到：**+{gain} 积分** ✅（连签 {gd.get('streak_days')} 天）")
+        elif "skipped" in gas:
+            print(f"加油站签到: 跳过（{gas['skipped']}）")
+        else:
+            print(f"加油站签到: {gas.get('raw') or gas.get('error')}")
+            lines.append(f"- ⛽ 加油站签到: {gas.get('raw') or gas.get('error')}")
+
     # ---- 派猫 ----
     if args.mode != "claim":
         print("\n--- 派猫猫 ---")
@@ -320,6 +349,8 @@ def main():
             "depart_status": (depart.get("status") if isinstance(depart, dict) else str(depart)),
             "depart_raw": (depart.get("raw") or depart.get("json") if isinstance(depart, dict) else None),
             "energy": energy.get("balance"),
+            "gas": (result.get("gas_claim") or {}).get("status"),
+            "gas_raw": ((result.get("gas_claim") or {}).get("raw") or (result.get("gas_claim") or {}).get("json")),
         }
         append_log(os.environ["GITHUB_TOKEN"], os.environ["GITHUB_REPOSITORY"],
                    "run_log.jsonl", json.dumps(log, ensure_ascii=False))
