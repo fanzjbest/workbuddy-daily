@@ -2,8 +2,9 @@ name: WorkBuddy 派猫猫
 
 on:
   schedule:
-    # 北京时间 10:13 与 22:13（UTC 02:13 / 14:13）各派一次
-    - cron: "13 2,14 * * *"
+    # 北京时间 9:05 与 14:05（UTC 01:05 / 06:05）各派一次
+    # 错开 5 分钟，确保 9:00 的领积分先执行，先清积压再派新猫
+    - cron: "5 1,6 * * *"
   workflow_dispatch:
 
 permissions:
