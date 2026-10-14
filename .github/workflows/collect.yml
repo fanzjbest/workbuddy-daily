@@ -1,0 +1,42 @@
+name: WorkBuddy 领积分
+
+on:
+  schedule:
+    # 北京时间 14:23（UTC 06:23）领一次
+    # 覆盖 10:13 派出的猫（最晚 14:13 到站），也覆盖前一日 22:13 派出的猫
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WB_STATE: ${{ secrets.WB_STATE }}
+      SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装依赖
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: 领取旅行奖励
+        run: python wb_growth_cloud.py --mode claim --always-notify
+      - name: 上传结果截图（排查用）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collect-screenshot
+          path: |
+            result.png
+            login_required.png
+          retention-days: 3
+          if-no-files-found: ignore
