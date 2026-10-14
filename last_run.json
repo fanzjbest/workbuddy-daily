@@ -1,0 +1,10 @@
+{
+  "time": "2026-10-14 02:34:50",
+  "mode": "depart",
+  "state": "idle",
+  "daily_limit": true,
+  "claim": null,
+  "claim_raw": null,
+  "depart": null,
+  "energy": 2
+}
