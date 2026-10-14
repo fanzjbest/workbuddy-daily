@@ -1,6 +1,6 @@
 {
-  "time": "2026-10-14 02:35:09",
-  "mode": "claim",
+  "time": "2026-10-14 02:35:20",
+  "mode": "depart",
   "state": "idle",
   "daily_limit": true,
   "claim": null,
