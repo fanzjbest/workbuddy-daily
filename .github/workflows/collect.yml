@@ -2,9 +2,8 @@ name: WorkBuddy 领积分
 
 on:
   schedule:
-    # 北京时间 14:23（UTC 06:23）领一次
-    # 覆盖 10:13 派出的猫（最晚 14:13 到站），也覆盖前一日 22:13 派出的猫
-    - cron: "23 6 * * *"
+    # 北京时间 9:00（UTC 01:00）领一次
+    - cron: "0 1 * * *"
   workflow_dispatch:
 
 permissions:
