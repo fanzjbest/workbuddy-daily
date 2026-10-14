@@ -163,6 +163,32 @@ def gh_put(token, repo, path, content, branch="main"):
         print("[!] 写回失败:", e)
 
 
+def append_log(token, repo, path, line, branch="main"):
+    """把一行 JSON 追加到仓库的 jsonl 文件（用于跨天历史）。"""
+    if not token or not repo:
+        return
+    api = f"https://api.github.com/repos/{repo}/contents/{path}"
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    old = ""
+    try:
+        with urllib.request.urlopen(urllib.request.Request(api, headers=headers), timeout=20) as r:
+            j = json.loads(r.read())
+            import base64 as _b
+            old = _b.b64decode(j["content"]).decode("utf-8", "ignore")
+            sha = j.get("sha")
+    except Exception:
+        sha = None
+    new_content = (old + line + "\n").encode("utf-8")
+    body = {"message": f"log append: {path}", "content": base64.b64encode(new_content).decode(), "branch": branch}
+    if sha:
+        body["sha"] = sha
+    try:
+        urllib.request.urlopen(urllib.request.Request(api, data=json.dumps(body).encode(), headers=headers, method="PUT"), timeout=20)
+        print("[log] 已追加", path)
+    except Exception as e:
+        print("[!] 追加失败:", e)
+
+
 def biz_ok(r):
     return isinstance(r, dict) and r.get("status") == 200 \
         and isinstance(r.get("json"), dict) and r["json"].get("code") == 0
@@ -282,20 +308,21 @@ def main():
     else:
         print("[push] 无新动作，不推送")
 
-    # 写回运行结果，便于排查 claim 是否真的命中
+    # 写回运行结果（追加历史），便于跨天排查 claim 是否真的命中
     if os.environ.get("GITHUB_TOKEN") and os.environ.get("GITHUB_REPOSITORY"):
         log = {
             "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "mode": args.mode,
             "state": result.get("travel_state_before"),
             "daily_limit": result.get("daily_limit_before"),
-            "claim": claim.get("status") if isinstance(claim, dict) else str(claim),
-            "claim_raw": (claim.get("raw") or (claim.get("json") if isinstance(claim, dict) else None)),
-            "depart": (depart.get("status") if isinstance(depart, dict) else str(depart)),
+            "claim_status": claim.get("status") if isinstance(claim, dict) else str(claim),
+            "claim_raw": (claim.get("raw") or claim.get("json") if isinstance(claim, dict) else None),
+            "depart_status": (depart.get("status") if isinstance(depart, dict) else str(depart)),
+            "depart_raw": (depart.get("raw") or depart.get("json") if isinstance(depart, dict) else None),
             "energy": energy.get("balance"),
         }
-        gh_put(os.environ["GITHUB_TOKEN"], os.environ["GITHUB_REPOSITORY"],
-               "last_run.json", json.dumps(log, ensure_ascii=False, indent=2))
+        append_log(os.environ["GITHUB_TOKEN"], os.environ["GITHUB_REPOSITORY"],
+                   "run_log.jsonl", json.dumps(log, ensure_ascii=False))
     print("[OK] 完成")
 
 
