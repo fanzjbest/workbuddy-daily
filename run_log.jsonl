@@ -98,3 +98,4 @@
 {"time": "2026-11-18 08:33:43", "mode": "depart", "state": "idle", "daily_limit": true, "claim_status": null, "claim_raw": null, "depart_status": null, "depart_raw": null, "energy": 2, "gas": null, "gas_raw": null}
 {"time": "2026-11-19 08:31:30", "mode": "claim", "state": "idle", "daily_limit": true, "claim_status": null, "claim_raw": null, "depart_status": null, "depart_raw": null, "energy": 2, "gas": null, "gas_raw": null}
 {"time": "2026-11-19 08:39:22", "mode": "depart", "state": "idle", "daily_limit": true, "claim_status": null, "claim_raw": null, "depart_status": null, "depart_raw": null, "energy": 2, "gas": null, "gas_raw": null}
+{"time": "2026-11-20 08:12:58", "mode": "claim", "state": "idle", "daily_limit": true, "claim_status": null, "claim_raw": null, "depart_status": null, "depart_raw": null, "energy": 2, "gas": null, "gas_raw": null}
